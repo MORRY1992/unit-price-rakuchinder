@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://unit-price-rakuchinder.pages.dev/sitemap.xml
