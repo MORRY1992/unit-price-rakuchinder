@@ -1,5 +1,5 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
-const n=process.argv[2]||"unit-price-rakuchinder",html=fs.readFileSync(n+'/public/index.html','utf8'),script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const n=process.argv[2]||"unit-price-rakuchinder",html=fs.readFileSync(fs.existsSync('public/index.html')?'public/index.html':n+'/public/index.html','utf8'),script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
 // Execute the actual production pure functions without the DOM event wiring.
 const funcs=[...script.matchAll(/function (whole|quantity|calc|decimal2|integer|date|conditions|pricePlan|packing)\([^]*?(?=\nfunction |\nfor\(|\nconst |\nform\.|\nsearch\.|\ncompare\.|\n\$\(|$)/g)].map(x=>x[0]);
 const c=vm.createContext({});vm.runInContext("const seats={any:'指定なし',four:'4列',three:'3列独立',other:'その他・不明'};"+funcs.join('\n'),c);let checks=0;function ok(expr){assert(vm.runInContext(expr,c),expr);checks++}function bad(expr){assert.throws(()=>vm.runInContext(expr,c));checks++}
