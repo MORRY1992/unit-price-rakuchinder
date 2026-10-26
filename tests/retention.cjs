@@ -1,26 +1,26 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const file=process.argv[2]||'public/index.html',html=fs.readFileSync(file,'utf8');
-const script=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
-const node=()=>({style:{},append(){},addEventListener(){},querySelectorAll(){return []}}),nodes=new Map();
-const context=vm.createContext({document:{getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},createElement:node},console});
-new vm.Script(script).runInContext(context);
-let checks=0;
-function ok(code){assert.ok(vm.runInContext(code,context));checks++}
-function rejects(code){assert.throws(()=>vm.runInContext(code,context));checks++}
+const html=fs.readFileSync(process.argv[2]||'public/index.html','utf8'),script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const pure=script.slice(script.indexOf('// PURE FUNCTIONS'),script.indexOf('// END PURE FUNCTIONS'));
+const c=vm.createContext({});vm.runInContext(pure,c);let checks=0;
+const ok=s=>{assert.ok(vm.runInContext(s,c),s);checks++},bad=s=>{assert.throws(()=>vm.runInContext(s,c),s);checks++};
 if(html.includes('id="unit-form"')){
- context.fixture={unit:'g',Aprice:'1000',Ashipping:'200',Adiscount:'100',Aquantity:'1000',Apacks:'1',Bprice:'900',Bshipping:'0',Bdiscount:'0',Bquantity:'800',Bpacks:'1'};
- ok('savedUnit(fixture)===fixture');
- ok('calc(fixture).cross<0n');
- ok('decimal2(calc(fixture).plans[0].cash*1000n*100n,calc(fixture).plans[0].amount)==="110.00"');
- rejects('savedUnit({...fixture,Aquantity:"0"})');
- rejects('savedUnit({...fixture,Aprice:1000})');
- rejects('savedUnit({...fixture,unit:"invalid"})');
+ c.v={unit:'g',Aprice:'1000',Ashipping:'200',Adiscount:'100',Aquantity:'1',Ameasure:'kg',Apacks:'1',Bprice:'900',Bshipping:'0',Bdiscount:'0',Bquantity:'800',Bmeasure:'g',Bpacks:'1'};
+ ok("calc(v).cross<0n");ok("decimal2(calc(v).plans[0].cash*100000n,calc(v).plans[0].amount)==='110.00'");
+ ok("calc({...v,Aquantity:'1000',Ameasure:'g'}).cross===calc(v).cross");
+ ok("calc({...v,unit:'ml',Ameasure:'L',Bmeasure:'ml'}).cross===calc(v).cross");
+ ok("calc({...v,Aprice:'900',Ashipping:'0',Adiscount:'0',Aquantity:'0.8'}).cross===0n");
+ ok("savedUnit(v)===v");bad("savedUnit({...v,Aprice:1000})");bad("calc({...v,Ameasure:'ml'})");bad("calc({...v,Aquantity:'0'})");bad("calc({...v,Apacks:'0'})");bad("calc({...v,Adiscount:'1201'})");
+ ok("calc({...v,Aprice:'0',Ashipping:'0',Adiscount:'0'}).plans[0].cash===0n");
+ // Same underlying quantity across equivalent units must always produce a tie.
+ for(let n=1;n<=100;n++){c.n=n;ok("calc({...v,Aprice:'1000',Ashipping:'0',Adiscount:'0',Aquantity:String(n),Bprice:'1000',Bquantity:String(n*1000)}).cross===0n");}
 }else{
- ok('validateCustom([{id:"custom-one",title:"ペンライト"}])[0].title==="ペンライト"');
- ok('validateCustom(Array.from({length:30},(_,i)=>({id:"custom-"+i,title:"持ち物"}))).length===30');
- rejects('validateCustom(Array.from({length:31},(_,i)=>({id:"custom-"+i,title:"持ち物"})))');
- rejects('validateCustom([{id:"custom-one",title:" "}])');
- rejects('validateCustom([{id:"custom-one",title:"a".repeat(61)}])');
- rejects('validateCustom([{id:"custom-one",title:"A"},{id:"custom-one",title:"B"}])');
+ ok("validateCustom([{id:'custom-a',title:' ペンライト '}])[0].title==='ペンライト'");bad("validateCustom([{id:'custom-a',title:' ' }])");bad("validateCustom(Array.from({length:31},(_,i)=>({id:'custom-'+i,title:'品'})))");bad("validateCustom([{id:'custom-a',title:'A'},{id:'custom-a',title:'B'}])");
+ ok("packing({nights:'30',mode:'train',wash:'3'}).find(x=>x[0]==='clothes')[2].startsWith('3組')");
+ ok("packing({nights:'1',mode:'train',wash:'3'}).find(x=>x[0]==='clothes')[2].startsWith('1組')");
+ ok("!packing({nights:'0',mode:'train',wash:'3'}).some(x=>x[0]==='clothes')");
+ ok("packing({nights:'1',mode:'bus',purpose:'oshi'}).some(x=>x[0]==='oshi-ticket')");
+ ok("packing({nights:'1',mode:'train',purpose:'work',work:true}).filter(x=>x[0]==='work').length===1");
+ bad("packing({nights:'31',mode:'train'})");bad("packing({nights:'1',mode:'train',purpose:'invalid'})");
+ c.old={values:{nights:'1',mode:'train',rain:false,work:false},checked:['ticket'],customItems:[]};ok("packingState(old).checked[0]==='ticket'");bad("packingState({...old,checked:['unknown']})");bad("packingState({...old,excluded:['unknown']})");
 }
-console.log(`${file}: ${checks} checks passed`);
+console.log(checks+' renewal checks passed');
